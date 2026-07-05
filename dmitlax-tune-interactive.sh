@@ -153,7 +153,7 @@ ask_value() {
 
 ask_tuning_values() {
   pause_line
-  echo "请输入 VPS 调优参数。"
+  echo "请输入 TCP/FQ 调优参数。"
   echo "留空会使用默认值；默认值采用新加坡 VPS 标准档：8MB + fq 10000/100 + backlog 2048。"
   pause_line
 
@@ -358,15 +358,15 @@ main() {
     fi
   fi
 
-  if ask_yes_no "是否应用本脚本里的 TCP/FQ 参数并固化？" "y"; then
+  if ask_yes_no "是否进行 TCP/FQ 调优并固化参数？" "y"; then
     ask_tuning_values
     if ! ask_yes_no "确认应用以上参数？" "y"; then
-      echo "已取消应用 TCP/FQ 参数。"
+      echo "已取消 TCP/FQ 调优。"
       exit 0
     fi
     apply_tuning
   else
-    echo "未应用 TCP/FQ 参数。"
+    echo "未进行 TCP/FQ 调优。"
   fi
 }
 

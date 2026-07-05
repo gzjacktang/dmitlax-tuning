@@ -18,8 +18,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/gzjacktang/dmitlax-tuning/ma
 - 检测当前 TCP 参数和 `eth0 qdisc`
 - 如果不是 BBR3，会询问是否安装 XanMod BBR3 内核
 - 选择安装 BBR3 时，会先备份当前配置
-- 询问是否执行 VPS 调优
-- 如果执行调优，会逐项询问每个 TCP/FQ 参数
+- 检测 BBR3 后，询问是否进行 TCP/FQ 调优
+- 如果选择调优，会逐项询问每个 TCP/FQ 参数
 - 每个参数直接回车会使用默认值，默认值采用新加坡 VPS 标准档
 - 确认后写入并固化 TCP/FQ 参数
 - 打印最终生效状态
