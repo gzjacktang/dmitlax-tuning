@@ -1,0 +1,17 @@
+.DS_Store
+
+# SSH private keys and local connection state
+.keys_*/
+.ssh-keys/
+.ssh_mux/
+.ssh_known_hosts
+*.pem
+*.ppk
+*.pub
+
+# Provider key archives
+*.zip
+
+# Local logs/temp files
+*.log
+tmp/
