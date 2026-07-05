@@ -6,12 +6,12 @@ set -euo pipefail
 # 这是给你 SSH 登录 VPS 后直接执行的脚本，不需要本地再 SSH 过去。
 #
 # 一键运行：
-#   bash <(curl -fsSL https://raw.githubusercontent.com/gzjacktang/dmitlax-tuning/main/dmitlax-tune.sh)
+#   bash <(curl -fsSL https://raw.githubusercontent.com/gzjacktang/dmitlax-tuning/main/dmitlax-tune-interactive.sh)
 #
 # 或者下载后改参数再运行：
-#   curl -fsSLO https://raw.githubusercontent.com/gzjacktang/dmitlax-tuning/main/dmitlax-tune.sh
-#   nano dmitlax-tune.sh
-#   bash dmitlax-tune.sh
+#   curl -fsSLO https://raw.githubusercontent.com/gzjacktang/dmitlax-tuning/main/dmitlax-tune-interactive.sh
+#   nano dmitlax-tune-interactive.sh
+#   bash dmitlax-tune-interactive.sh
 
 ###############################################################################
 # 可调参数区
@@ -153,8 +153,8 @@ ask_value() {
 
 ask_tuning_values() {
   pause_line
-  echo "请输入 TCP/FQ 调优参数。"
-  echo "留空会使用默认值；默认值采用新加坡 VPS 标准档：8MB + fq 10000/100 + backlog 2048。"
+  echo "请输入单项 TCP/FQ 调优参数。"
+  echo "留空会使用默认值；默认值采用 MD 中新加坡机器的最优配置：8MB + fq 10000/100 + backlog 2048。"
   pause_line
 
   ask_value NETDEV "网卡名 NETDEV" "$NETDEV" "要应用 FQ 的网卡名；不确定时先保持 eth0。"
@@ -185,6 +185,30 @@ ask_tuning_values() {
 
   pause_line
   echo "即将应用以下参数："
+  cat <<EOF
+NETDEV=${NETDEV}
+DEFAULT_QDISC=${DEFAULT_QDISC}
+TCP_CONGESTION_CONTROL=${TCP_CONGESTION_CONTROL}
+TCP_SLOW_START_AFTER_IDLE=${TCP_SLOW_START_AFTER_IDLE}
+TCP_MTU_PROBING=${TCP_MTU_PROBING}
+TCP_NOTSENT_LOWAT=${TCP_NOTSENT_LOWAT}
+RMEM_MAX=${RMEM_MAX}
+WMEM_MAX=${WMEM_MAX}
+tcp_rmem=${TCP_RMEM_MIN} ${TCP_RMEM_DEFAULT} ${TCP_RMEM_MAX}
+tcp_wmem=${TCP_WMEM_MIN} ${TCP_WMEM_DEFAULT} ${TCP_WMEM_MAX}
+NETDEV_MAX_BACKLOG=${NETDEV_MAX_BACKLOG}
+SOMAXCONN=${SOMAXCONN}
+TCP_MAX_SYN_BACKLOG=${TCP_MAX_SYN_BACKLOG}
+TCP_SYNCOOKIES=${TCP_SYNCOOKIES}
+FQ_LIMIT=${FQ_LIMIT}
+FQ_FLOW_LIMIT=${FQ_FLOW_LIMIT}
+EOF
+  pause_line
+}
+
+show_tuning_values() {
+  pause_line
+  echo "$1"
   cat <<EOF
 NETDEV=${NETDEV}
 DEFAULT_QDISC=${DEFAULT_QDISC}
@@ -301,7 +325,7 @@ apply_tuning() {
   echo "已备份当前配置到：${backup_dir}"
 
   cat > "$SYSCTL_FILE" <<EOF
-# Managed by dmitlax-tune.sh
+# Managed by dmitlax-tune-interactive.sh
 net.core.default_qdisc = ${DEFAULT_QDISC}
 net.ipv4.tcp_congestion_control = ${TCP_CONGESTION_CONTROL}
 net.ipv4.tcp_slow_start_after_idle = ${TCP_SLOW_START_AFTER_IDLE}
@@ -358,15 +382,20 @@ main() {
     fi
   fi
 
-  if ask_yes_no "是否进行 TCP/FQ 调优并固化参数？" "y"; then
-    ask_tuning_values
-    if ! ask_yes_no "确认应用以上参数？" "y"; then
-      echo "已取消 TCP/FQ 调优。"
-      exit 0
+  if ask_yes_no "是否加载预配置并固化？是=应用 MD 中新加坡机器最优配置，否=进入单项调优" "y"; then
+    show_tuning_values "将加载预配置：MD 中新加坡机器最优配置。"
+    if ask_yes_no "确认应用以上预配置？" "y"; then
+      apply_tuning
+    else
+      echo "已取消加载预配置。"
     fi
-    apply_tuning
   else
-    echo "未进行 TCP/FQ 调优。"
+    ask_tuning_values
+    if ask_yes_no "确认应用以上单项调优参数？" "y"; then
+      apply_tuning
+    else
+      echo "已取消单项 TCP/FQ 调优。"
+    fi
   fi
 }
 

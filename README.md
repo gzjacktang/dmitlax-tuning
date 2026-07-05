@@ -18,11 +18,19 @@ bash <(curl -fsSL https://raw.githubusercontent.com/gzjacktang/dmitlax-tuning/ma
 - 检测当前 TCP 参数和 `eth0 qdisc`
 - 如果不是 BBR3，会询问是否安装 XanMod BBR3 内核
 - 选择安装 BBR3 时，会先备份当前配置
-- 检测 BBR3 后，询问是否进行 TCP/FQ 调优
-- 如果选择调优，会逐项询问每个 TCP/FQ 参数
-- 每个参数直接回车会使用默认值，默认值采用新加坡 VPS 标准档
+- 检测 BBR3 后，询问是否加载预配置并固化
+- 选择“是”会直接加载 MD 中新加坡机器最优配置；选择“否”会进入单项 TCP/FQ 调优
+- 单项调优时，每个参数直接回车会使用默认值，默认值采用 MD 中新加坡机器最优配置
 - 确认后写入并固化 TCP/FQ 参数
 - 打印最终生效状态
+
+预配置就是 `VPS线路优化记录.md` 里新加坡机器的最佳配置：
+
+```text
+8MB + fq 10000/100 + backlog 2048
+mtu_probing = 0
+tcp_notsent_lowat = 4294967295
+```
 
 BBR3 安装使用 XanMod 官方 APT 仓库方式。XanMod 官方文档说明其内核包含 BBRv3，并给出的安装步骤是注册 PGP key、添加 `deb.xanmod.org` 仓库，然后安装 `linux-xanmod-x64v3`。安装内核后需要重启 VPS 才会切到新内核。
 
