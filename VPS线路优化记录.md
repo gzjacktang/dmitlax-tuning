@@ -18,9 +18,9 @@
 
 154 是洛杉矶方向，武汉到 VPS 跨太平洋，RTT 更高，长距离链路更容易受 TCP 窗口和 pacing 影响。
 
-2026-07-05 单独重调：用户反馈前面 FQ 参数可能不准确，先按 45 新加坡节点的标准档在 154 上试一版，用于独立观察。随后用户反馈基准版本偏温柔，试过 16MB 中激进档后反馈更差，因此继续反向试比基准更温和的档位。最终 `4MB + fq 5000/64` 反馈最好；再降到 `2MB + fq 2500/64` 后不如上一版，因此已回到 `4MB + fq 5000/64`，并作为 dmitlax 已验证最佳配置。
+2026-07-05 单独重调：用户反馈前面 FQ 参数可能不准确，先按 45 新加坡节点的标准档在 154 上试一版，用于独立观察。随后用户反馈基准版本偏温柔，试过 16MB 中激进档后反馈更差，因此继续反向试比基准更温和的档位。`4MB + fq 5000/64` 反馈很好；再降到 `2MB + fq 2500/64` 后不如上一版。后续临时试探 `fq 8000/64` 后用户要求固化，当前 `4MB + fq 8000/64 + backlog 1024` 作为 dmitlax 已验证最佳配置。
 
-当前正在试验激进组合策略：先保留 `4MB` TCP 窗口，只把 `eth0 root fq` 从 `limit 5000 flow_limit 64` 提到 `limit 20000 flow_limit 1000`；随后用户要求 TCP 窗口基线也激进一点，因此把 TCP 窗口从 `4MB` 提到 `8MB`，并把 `netdev_max_backlog` 从 `1024` 提到 `2048`。用户反馈 `8MB + fq 20000/1000` 的 YouTube 比之前好，但 Speedtest 变差，因此曾收敛为 `8MB + fq 10000/100`。随后继续把 TCP 窗口推到 `16MB`，FQ 保持 `10000/100`，再按用户要求回到 `8MB`。用户反馈 `fq 10000/100` 速度不如激进档，但 `fq 20000/1000` 的 Speedtest 不行；`fq 20000/100` 下载好一些但上传差，尤其是 `limit 20000` 档位。降回 `10000/100` 后 YouTube 又差一点，因此试过 `8MB + fq 15000/100 + netdev_backlog 4096` 作为中间点。2026-07-05 用户自行通过脚本切回 `4MB + fq 5000/64 + backlog 1024`，反馈速度很好；随后已在 VPS 上再次固化该档，当前以该档作为 dmitlax 当前最佳配置。
+当前正在试验激进组合策略：先保留 `4MB` TCP 窗口，只把 `eth0 root fq` 从 `limit 5000 flow_limit 64` 提到 `limit 20000 flow_limit 1000`；随后用户要求 TCP 窗口基线也激进一点，因此把 TCP 窗口从 `4MB` 提到 `8MB`，并把 `netdev_max_backlog` 从 `1024` 提到 `2048`。用户反馈 `8MB + fq 20000/1000` 的 YouTube 比之前好，但 Speedtest 变差，因此曾收敛为 `8MB + fq 10000/100`。随后继续把 TCP 窗口推到 `16MB`，FQ 保持 `10000/100`，再按用户要求回到 `8MB`。用户反馈 `fq 10000/100` 速度不如激进档，但 `fq 20000/1000` 的 Speedtest 不行；`fq 20000/100` 下载好一些但上传差，尤其是 `limit 20000` 档位。降回 `10000/100` 后 YouTube 又差一点，因此试过 `8MB + fq 15000/100 + netdev_backlog 4096` 作为中间点。2026-07-05 用户自行通过脚本切回 `4MB + fq 5000/64 + backlog 1024`，反馈速度很好；随后又临时测试 `fq 20000/64`、`10000/64`、`8000/64`，最终要求固化 `4MB + fq 8000/64 + backlog 1024`，当前以该档作为 dmitlax 当前最佳配置。
 
 已验证最佳配置：
 
@@ -29,7 +29,7 @@ kernel = 6.18.37-x64v3-xanmod1
 tcp_bbr version = 3
 tcp_congestion_control = bbr
 default_qdisc = fq
-eth0 qdisc = root fq limit 5000 flow_limit 64
+eth0 qdisc = root fq limit 8000 flow_limit 64
 tcp_slow_start_after_idle = 0
 tcp_mtu_probing = 0
 tcp_notsent_lowat = 4294967295
@@ -46,7 +46,7 @@ kernel = 6.18.37-x64v3-xanmod1
 tcp_bbr version = 3
 tcp_congestion_control = bbr
 default_qdisc = fq
-eth0 qdisc = root fq limit 5000 flow_limit 64
+eth0 qdisc = root fq limit 8000 flow_limit 64
 tcp_slow_start_after_idle = 0
 tcp_mtu_probing = 0
 tcp_notsent_lowat = 4294967295
@@ -78,14 +78,14 @@ netdev_max_backlog = 4096
 ```text
 /etc/sysctl.d/98-bbr3-balanced.conf
 /etc/systemd/system/codex-root-fq.service
-tc qdisc replace dev eth0 root fq limit 5000 flow_limit 64
+tc qdisc replace dev eth0 root fq limit 8000 flow_limit 64
 ```
 
 最新固化确认：
 
 ```text
 2026-07-05
-backup_stamp = 20260705-113726
+backup_stamp = 20260705-115909
 codex-root-fq.service = enabled / active
 ```
 
@@ -93,7 +93,8 @@ codex-root-fq.service = enabled / active
 
 - `16MB + fq 10000/100`：比基准更差，偏激进。
 - `8MB + fq 10000/100`：可作为新加坡标准迁移基准，但对 dmitlax 偏温柔且不是最佳点。
-- `4MB + fq 5000/64`：当前最佳，已固化。
+- `4MB + fq 5000/64`：上一版很好，后续已提升到 `8000/64`。
+- `4MB + fq 8000/64`：当前最佳，已固化。
 - `2MB + fq 2500/64`：更温和但不如 4MB 档。
 - `4MB + fq 20000/1000`：最激进 FQ 单变量试验档。
 - `8MB + fq 20000/1000`：YouTube 比之前好，但 Speedtest 变差。
