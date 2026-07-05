@@ -5,6 +5,7 @@
 .ssh-keys/
 .ssh_mux/
 .ssh_known_hosts
+.known_hosts
 *.pem
 *.ppk
 *.pub
