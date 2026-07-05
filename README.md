@@ -18,7 +18,10 @@ bash <(curl -fsSL https://raw.githubusercontent.com/gzjacktang/dmitlax-tuning/ma
 - 检测当前 TCP 参数和 `eth0 qdisc`
 - 如果不是 BBR3，会询问是否安装 XanMod BBR3 内核
 - 选择安装 BBR3 时，会先备份当前配置
-- 写入并固化 TCP/FQ 参数
+- 询问是否执行 VPS 调优
+- 如果执行调优，会逐项询问每个 TCP/FQ 参数
+- 每个参数直接回车会使用默认值，默认值采用新加坡 VPS 标准档
+- 确认后写入并固化 TCP/FQ 参数
 - 打印最终生效状态
 
 BBR3 安装使用 XanMod 官方 APT 仓库方式。XanMod 官方文档说明其内核包含 BBRv3，并给出的安装步骤是注册 PGP key、添加 `deb.xanmod.org` 仓库，然后安装 `linux-xanmod-x64v3`。安装内核后需要重启 VPS 才会切到新内核。
@@ -44,8 +47,8 @@ bash dmitlax-tune.sh
 | `WMEM_MAX` | `8388608` | TCP 发送缓冲最大值，单位字节；通常和 `RMEM_MAX` 同档。 | 加大可能改善上传/出站吞吐，过大也可能堆积。 |
 | `TCP_RMEM_MAX` | `$RMEM_MAX` | `tcp_rmem` 第三个值，TCP 自动接收窗口上限。 | 通常跟 `RMEM_MAX` 保持一致。 |
 | `TCP_WMEM_MAX` | `$WMEM_MAX` | `tcp_wmem` 第三个值，TCP 自动发送窗口上限。 | 通常跟 `WMEM_MAX` 保持一致。 |
-| `NETDEV_MAX_BACKLOG` | `4096` | 网卡收包 backlog，单位是包数量，不是字节。 | 加大能吃突发，过大可能增加排队延迟。 |
-| `FQ_LIMIT` | `15000` | `fq` 总队列包数上限，单位是包数量。 | `10000` 上传较稳但 YouTube 略差；`20000` 下载/YouTube 可能好但上传容易差；`15000` 是中间档。 |
+| `NETDEV_MAX_BACKLOG` | `2048` | 网卡收包 backlog，单位是包数量，不是字节。 | 加大能吃突发，过大可能增加排队延迟。 |
+| `FQ_LIMIT` | `10000` | `fq` 总队列包数上限，单位是包数量。 | `10000` 上传较稳但 YouTube 略差；`20000` 下载/YouTube 可能好但上传容易差；`15000` 是中间档。 |
 | `FQ_FLOW_LIMIT` | `100` | `fq` 单 flow 包数上限，单位是包数量。 | `64` 更温和；`100` 当前较均衡；`1000` 很激进，体感可能好但 Speedtest 容易差。 |
 | `TCP_MTU_PROBING` | `0` | TCP MTU 探测。 | `0` 当前更稳；遇到疑似 MTU 黑洞时可试 `1`。 |
 | `TCP_NOTSENT_LOWAT` | `4294967295` | 未发送数据低水位，影响应用写入后内核积压控制。 | 当前相当于较放开；改小可控延迟，但可能影响起速/吞吐。 |
@@ -70,7 +73,7 @@ bash dmitlax-tune.sh
 当前脚本默认：
 
 ```text
-8MB + fq 15000/100 + backlog 4096
+8MB + fq 10000/100 + backlog 2048
 ```
 
 历史结论见：

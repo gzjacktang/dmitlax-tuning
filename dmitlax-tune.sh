@@ -68,7 +68,8 @@ TCP_WMEM_MAX="$WMEM_MAX"
 # 网卡收包 backlog，单位是包数量，不是字节。
 # 常用档位：512 / 1024 / 2048 / 4096 / 8192。
 # 越大越能吃突发，过大可能增加排队延迟。
-NETDEV_MAX_BACKLOG="4096"
+# 默认值采用新加坡 VPS 标准档。
+NETDEV_MAX_BACKLOG="2048"
 
 # 连接队列。通常保持即可，不是当前主要调优旋钮。
 SOMAXCONN="8192"
@@ -80,10 +81,10 @@ TCP_SYNCOOKIES="1"
 # FQ 总队列包数上限，单位是包数量，不是字节。
 # dmitlax 已试过：
 #   5000  = 稳定基准
-#   10000 = 上传相对好，但 YouTube 略差
+#   10000 = 新加坡 VPS 标准档
 #   15000 = 10000 和 20000 中间档
 #   20000 = 下载/YouTube 可能更好，但上传更容易变差
-FQ_LIMIT="15000"
+FQ_LIMIT="10000"
 
 # FQ 单 flow 包数上限，单位是包数量。
 # dmitlax 已试过：
@@ -134,6 +135,75 @@ ask_yes_no() {
     y|Y|yes|YES|Yes|是) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+ask_value() {
+  local var_name="$1"
+  local prompt="$2"
+  local default_value="$3"
+  local note="${4:-}"
+  local answer
+
+  if [ -n "$note" ]; then
+    echo "  ${note}"
+  fi
+  read -r -p "${prompt}，留空默认 ${default_value}: " answer
+  printf -v "$var_name" '%s' "${answer:-$default_value}"
+}
+
+ask_tuning_values() {
+  pause_line
+  echo "请输入 VPS 调优参数。"
+  echo "留空会使用默认值；默认值采用新加坡 VPS 标准档：8MB + fq 10000/100 + backlog 2048。"
+  pause_line
+
+  ask_value NETDEV "网卡名 NETDEV" "$NETDEV" "要应用 FQ 的网卡名；不确定时先保持 eth0。"
+  ask_value DEFAULT_QDISC "默认队列 DEFAULT_QDISC" "$DEFAULT_QDISC" "BBR/BBR3 通常使用 fq。"
+  ask_value TCP_CONGESTION_CONTROL "拥塞控制 TCP_CONGESTION_CONTROL" "$TCP_CONGESTION_CONTROL" "BBR3 内核下仍然填写 bbr。"
+  ask_value TCP_SLOW_START_AFTER_IDLE "空闲后慢启动 TCP_SLOW_START_AFTER_IDLE" "$TCP_SLOW_START_AFTER_IDLE" "0 = 不重新慢启动；1 = 使用默认慢启动。"
+  ask_value TCP_MTU_PROBING "MTU 探测 TCP_MTU_PROBING" "$TCP_MTU_PROBING" "0 = 关闭；1 = 弱探测；2 = 总是探测。"
+  ask_value TCP_NOTSENT_LOWAT "未发送低水位 TCP_NOTSENT_LOWAT" "$TCP_NOTSENT_LOWAT" "4294967295 = 基本放开；65536/131072/262144 = 更控延迟。"
+
+  ask_value RMEM_MAX "接收窗口最大 RMEM_MAX" "$RMEM_MAX" "单位字节；8388608 = 8MB。"
+  ask_value WMEM_MAX "发送窗口最大 WMEM_MAX" "$WMEM_MAX" "单位字节；通常与 RMEM_MAX 同档。"
+
+  ask_value TCP_RMEM_MIN "tcp_rmem 最小值" "$TCP_RMEM_MIN"
+  ask_value TCP_RMEM_DEFAULT "tcp_rmem 默认值" "$TCP_RMEM_DEFAULT"
+  ask_value TCP_RMEM_MAX "tcp_rmem 最大值" "$RMEM_MAX" "默认跟 RMEM_MAX 保持一致。"
+
+  ask_value TCP_WMEM_MIN "tcp_wmem 最小值" "$TCP_WMEM_MIN"
+  ask_value TCP_WMEM_DEFAULT "tcp_wmem 默认值" "$TCP_WMEM_DEFAULT"
+  ask_value TCP_WMEM_MAX "tcp_wmem 最大值" "$WMEM_MAX" "默认跟 WMEM_MAX 保持一致。"
+
+  ask_value NETDEV_MAX_BACKLOG "网卡 backlog NETDEV_MAX_BACKLOG" "$NETDEV_MAX_BACKLOG" "单位是包数量；新加坡标准档为 2048。"
+  ask_value SOMAXCONN "连接队列 SOMAXCONN" "$SOMAXCONN"
+  ask_value TCP_MAX_SYN_BACKLOG "SYN 队列 TCP_MAX_SYN_BACKLOG" "$TCP_MAX_SYN_BACKLOG"
+  ask_value TCP_SYNCOOKIES "SYN cookies TCP_SYNCOOKIES" "$TCP_SYNCOOKIES" "通常保持 1。"
+
+  ask_value FQ_LIMIT "FQ 总队列 FQ_LIMIT" "$FQ_LIMIT" "单位是包数量；新加坡标准档为 10000。"
+  ask_value FQ_FLOW_LIMIT "FQ 单 flow 队列 FQ_FLOW_LIMIT" "$FQ_FLOW_LIMIT" "单位是包数量；新加坡标准档为 100。"
+
+  pause_line
+  echo "即将应用以下参数："
+  cat <<EOF
+NETDEV=${NETDEV}
+DEFAULT_QDISC=${DEFAULT_QDISC}
+TCP_CONGESTION_CONTROL=${TCP_CONGESTION_CONTROL}
+TCP_SLOW_START_AFTER_IDLE=${TCP_SLOW_START_AFTER_IDLE}
+TCP_MTU_PROBING=${TCP_MTU_PROBING}
+TCP_NOTSENT_LOWAT=${TCP_NOTSENT_LOWAT}
+RMEM_MAX=${RMEM_MAX}
+WMEM_MAX=${WMEM_MAX}
+tcp_rmem=${TCP_RMEM_MIN} ${TCP_RMEM_DEFAULT} ${TCP_RMEM_MAX}
+tcp_wmem=${TCP_WMEM_MIN} ${TCP_WMEM_DEFAULT} ${TCP_WMEM_MAX}
+NETDEV_MAX_BACKLOG=${NETDEV_MAX_BACKLOG}
+SOMAXCONN=${SOMAXCONN}
+TCP_MAX_SYN_BACKLOG=${TCP_MAX_SYN_BACKLOG}
+TCP_SYNCOOKIES=${TCP_SYNCOOKIES}
+FQ_LIMIT=${FQ_LIMIT}
+FQ_FLOW_LIMIT=${FQ_FLOW_LIMIT}
+EOF
+  pause_line
 }
 
 make_backup() {
@@ -289,6 +359,11 @@ main() {
   fi
 
   if ask_yes_no "是否应用本脚本里的 TCP/FQ 参数并固化？" "y"; then
+    ask_tuning_values
+    if ! ask_yes_no "确认应用以上参数？" "y"; then
+      echo "已取消应用 TCP/FQ 参数。"
+      exit 0
+    fi
     apply_tuning
   else
     echo "未应用 TCP/FQ 参数。"
