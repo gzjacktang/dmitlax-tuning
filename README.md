@@ -1,42 +1,45 @@
 # dmitlax VPS tuning
 
-这个仓库保存 `154.21.82.9`，也就是 `dmitlax` 的网络参数调优记录和一键应用脚本。
+这个仓库保存 `154.21.82.9`，也就是 `dmitlax` 的网络参数调优记录和一键脚本。
 
-## 一键应用
+脚本是给你 **SSH 登录 VPS 后在 VPS 本机执行** 的，不需要在本地电脑再 SSH 到 VPS。
 
-先确认本地有私钥：
+## 一键运行
 
-```bash
-.keys_lax/key-nav9zdce.pem
-```
-
-然后执行：
+SSH 登录 VPS 后执行：
 
 ```bash
-./scripts/apply-dmitlax-tuning.sh
+bash <(curl -fsSL https://raw.githubusercontent.com/gzjacktang/dmitlax-tuning/main/scripts/apply-dmitlax-tuning.sh)
 ```
 
-脚本会：
+脚本启动后会：
 
-- 使用 SSH 长连接复用连接 VPS
-- 备份 VPS 上旧的 `/etc/sysctl.d/98-bbr3-balanced.conf`
-- 备份 VPS 上旧的 `/etc/systemd/system/codex-root-fq.service`
-- 写入新的 TCP/BBR 参数
-- 写入并启动 root fq 持久化服务
-- 打印当前生效参数
+- 检测当前内核、BBR 状态、`tcp_bbr version`
+- 检测当前 TCP 参数和 `eth0 qdisc`
+- 如果不是 BBR3，会询问是否安装 XanMod BBR3 内核
+- 选择安装 BBR3 时，会先备份当前配置
+- 写入并固化 TCP/FQ 参数
+- 打印最终生效状态
 
-## 修改参数
+BBR3 安装使用 XanMod 官方 APT 仓库方式。XanMod 官方文档说明其内核包含 BBRv3，并给出的安装步骤是注册 PGP key、添加 `deb.xanmod.org` 仓库，然后安装 `linux-xanmod-x64v3`。安装内核后需要重启 VPS 才会切到新内核。
 
-直接编辑：
+## 下载后修改再运行
+
+如果你想先改参数，再执行：
 
 ```bash
-scripts/apply-dmitlax-tuning.sh
+curl -fsSLO https://raw.githubusercontent.com/gzjacktang/dmitlax-tuning/main/scripts/apply-dmitlax-tuning.sh
+nano apply-dmitlax-tuning.sh
+bash apply-dmitlax-tuning.sh
 ```
 
-重点参数在脚本顶部：
+## 参数说明
+
+重点参数都在脚本顶部。
 
 | 参数 | 当前默认值 | 作用 | 调整方向 |
 | --- | ---: | --- | --- |
+| `NETDEV` | `eth0` | 要应用 FQ 的网卡名。 | 如果 VPS 网卡不是 `eth0`，用 `ip link` 查看后修改。 |
 | `RMEM_MAX` | `8388608` | TCP 接收缓冲最大值，单位字节；`8388608 = 8MB`。 | 加大可能改善长 RTT 下载/视频吞吐，过大可能增加延迟或让 Speedtest 变差。 |
 | `WMEM_MAX` | `8388608` | TCP 发送缓冲最大值，单位字节；通常和 `RMEM_MAX` 同档。 | 加大可能改善上传/出站吞吐，过大也可能堆积。 |
 | `TCP_RMEM_MAX` | `$RMEM_MAX` | `tcp_rmem` 第三个值，TCP 自动接收窗口上限。 | 通常跟 `RMEM_MAX` 保持一致。 |
@@ -48,7 +51,8 @@ scripts/apply-dmitlax-tuning.sh
 | `TCP_NOTSENT_LOWAT` | `4294967295` | 未发送数据低水位，影响应用写入后内核积压控制。 | 当前相当于较放开；改小可控延迟，但可能影响起速/吞吐。 |
 | `TCP_SLOW_START_AFTER_IDLE` | `0` | 连接空闲后是否重新慢启动。 | `0` 对视频和长连接通常更顺。 |
 | `DEFAULT_QDISC` | `fq` | 默认队列算法。 | BBR 通常配 `fq`。 |
-| `TCP_CONGESTION_CONTROL` | `bbr` | TCP 拥塞控制算法。 | 当前 dmitlax 是 BBR3 内核下的 `bbr`。 |
+| `TCP_CONGESTION_CONTROL` | `bbr` | TCP 拥塞控制算法。 | BBR3 内核下仍然设置为 `bbr`，区别看 `tcp_bbr version`。 |
+| `XANMOD_PACKAGE` | `linux-xanmod-x64v3` | 可选安装的 BBR3 内核包。 | 如果 CPU 不支持 x64v3，可改成 `linux-xanmod-x64v2` 或 `linux-xanmod-lts-x64v2`。 |
 
 常用窗口换算：
 
@@ -75,19 +79,20 @@ scripts/apply-dmitlax-tuning.sh
 VPS线路优化记录.md
 ```
 
-## GitHub 发布
+## 备份位置
 
-本地密钥和压缩包已被 `.gitignore` 排除，不会提交到 GitHub。
+每次安装 BBR3 或应用参数前，脚本都会备份到：
 
-如果本机已经有 GitHub CLI，可以创建远端仓库并推送：
-
-```bash
-gh repo create dmitlax-tuning --private --source=. --remote=origin --push
+```text
+/root/dmitlax-tune-backups/YYYYMMDD-HHMMSS/
 ```
 
-或者先在 GitHub 网页创建一个空仓库，然后执行：
+里面会保存：
 
-```bash
-git remote add origin git@github.com:你的用户名/dmitlax-tuning.git
-git push -u origin main
-```
+- 当前内核信息
+- 当前 sysctl 全量输出
+- 当前 qdisc
+- 当前 linux 包列表
+- 旧的 `/etc/sysctl.d/98-bbr3-balanced.conf`
+- 旧的 `/etc/systemd/system/codex-root-fq.service`
+- 旧的 XanMod APT 源配置
